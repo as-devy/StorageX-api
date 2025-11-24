@@ -1,0 +1,51 @@
+config:
+  target: "http://localhost:3000"  # Change if API is hosted elsewhere
+  phases:
+    - duration: 30      # Run test for 30 seconds
+      arrivalRate: 5    # 5 new users (virtual clients) per second
+  defaults:
+    headers:
+      Content-Type: "application/json"
+      owner-id: "OWNER_TEST_ID"     # Replace with a real owner_id or auth header
+
+scenarios:
+  - name: "Full CRUD flow for orders"
+    flow:
+      # 1️⃣ GET all orders
+      - get:
+          url: "/orders"
+          capture:
+            - json: "$[0].id"
+              as: "existingOrderId"
+
+      # 2️⃣ POST create new order
+      - post:
+          url: "/orders"
+          json:
+            shop_id: 1
+            customer_id: 2
+            order_number: "ORD-{{ $randomNumber(1000, 9999) }}"
+            customer_email: "user{{ $randomNumber(1,100) }}@test.com"
+            item_count: 3
+            total_amount: 250
+            status: "pending"
+            order_date: "2025-11-05"
+            tracking_number: "TRK{{ $randomNumber(10000,99999) }}"
+          capture:
+            - json: "id"
+              as: "createdOrderId"
+
+      # 3️⃣ PUT update the new order
+      - put:
+          url: "/orders/{{ createdOrderId }}"
+          json:
+            status: "completed"
+            total_amount: 300
+
+      # 4️⃣ DELETE the same order
+      - delete:
+          url: "/orders/{{ createdOrderId }}"
+
+      # 5️⃣ GET all orders again
+      - get:
+          url: "/orders"
