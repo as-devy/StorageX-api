@@ -1,16 +1,24 @@
 import { supabase } from "../config/supabaseClient.js";
+import { ensureOwnerRecord } from "../utils/ownerHelper.js";
 
-// Helper function to get owner_id from auth user
-const getOwnerId = async (authUserId) => {
-  const { data, error } = await supabase
-    .from("owners")
-    .select("id")
-    .eq("auth_user_id", authUserId)
-    .single();
+// Helper function to get owner_id from auth user (with auto-create fallback)
+const getOwnerId = async (authUserId, userMetadata = {}) => {
+  try {
+    const { data, error } = await supabase
+      .from("owners")
+      .select("id")
+      .eq("auth_user_id", authUserId)
+      .single();
 
-  if (error || !data) throw new Error("Owner not found for this user");
+    if (data && !error) {
+      return data.id;
+    }
 
-  return data.id;
+    // Owner doesn't exist, create it
+    return await ensureOwnerRecord(authUserId, userMetadata);
+  } catch (err) {
+    throw new Error("Failed to get or create owner record");
+  }
 };
 
 /* ----------------------------------------------
@@ -18,7 +26,11 @@ const getOwnerId = async (authUserId) => {
 ---------------------------------------------- */
 export const getSuppliers = async (req, res) => {
   try {
-    const ownerId = await getOwnerId(req.user.id);
+    const ownerId = await getOwnerId(req.user.id, {
+      full_name: req.user.user_metadata?.full_name,
+      company_name: req.user.user_metadata?.company_name,
+      phone: req.user.user_metadata?.phone,
+    });
 
     const { data, error } = await supabase
       .from("suppliers")
@@ -39,7 +51,11 @@ export const getSuppliers = async (req, res) => {
 ---------------------------------------------- */
 export const getSupplierById = async (req, res) => {
   try {
-    const ownerId = await getOwnerId(req.user.id);
+    const ownerId = await getOwnerId(req.user.id, {
+      full_name: req.user.user_metadata?.full_name,
+      company_name: req.user.user_metadata?.company_name,
+      phone: req.user.user_metadata?.phone,
+    });
     const supplierId = req.params.id;
 
     const { data, error } = await supabase
@@ -62,7 +78,11 @@ export const getSupplierById = async (req, res) => {
 ---------------------------------------------- */
 export const createSupplier = async (req, res) => {
   try {
-    const ownerId = await getOwnerId(req.user.id);
+    const ownerId = await getOwnerId(req.user.id, {
+      full_name: req.user.user_metadata?.full_name,
+      company_name: req.user.user_metadata?.company_name,
+      phone: req.user.user_metadata?.phone,
+    });
 
     const { data, error } = await supabase
       .from("suppliers")
@@ -88,7 +108,11 @@ export const createSupplier = async (req, res) => {
 ---------------------------------------------- */
 export const updateSupplier = async (req, res) => {
   try {
-    const ownerId = await getOwnerId(req.user.id);
+    const ownerId = await getOwnerId(req.user.id, {
+      full_name: req.user.user_metadata?.full_name,
+      company_name: req.user.user_metadata?.company_name,
+      phone: req.user.user_metadata?.phone,
+    });
     const supplierId = req.params.id;
 
     const { data, error } = await supabase
@@ -112,7 +136,11 @@ export const updateSupplier = async (req, res) => {
 ---------------------------------------------- */
 export const deleteSupplier = async (req, res) => {
   try {
-    const ownerId = await getOwnerId(req.user.id);
+    const ownerId = await getOwnerId(req.user.id, {
+      full_name: req.user.user_metadata?.full_name,
+      company_name: req.user.user_metadata?.company_name,
+      phone: req.user.user_metadata?.phone,
+    });
     const supplierId = req.params.id;
 
     const { error } = await supabase

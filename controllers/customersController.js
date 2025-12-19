@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabaseClient.js';
+import { ensureOwnerRecord } from '../utils/ownerHelper.js';
 
 /**
  * ✅ Get all customers for all shops belonging to the authenticated owner
@@ -7,18 +8,32 @@ export const getCustomers = async (req, res) => {
   try {
     console.log("🔑 Auth user ID:", req.user.id);
 
-    // 1️⃣ Get the owner's internal ID using auth_user_id
-    const { data: ownerData, error: ownerError } = await supabase
-      .from('owners')
-      .select('id')
-      .eq('auth_user_id', req.user.id)
-      .single();
+    // 1️⃣ Get or create the owner's internal ID using auth_user_id
+    let ownerId;
+    try {
+      const { data: ownerData, error: ownerError } = await supabase
+        .from('owners')
+        .select('id')
+        .eq('auth_user_id', req.user.id)
+        .single();
 
-    if (ownerError || !ownerData) {
-      throw new Error('Owner record not found for this user');
+      if (ownerData && !ownerError) {
+        ownerId = ownerData.id;
+        console.log("✅ Found existing owner ID:", ownerId);
+      } else {
+        // Owner doesn't exist, create it
+        console.log("⚠️ Owner record not found, creating...");
+        ownerId = await ensureOwnerRecord(req.user.id, {
+          full_name: req.user.user_metadata?.full_name,
+          company_name: req.user.user_metadata?.company_name,
+          phone: req.user.user_metadata?.phone,
+        });
+        console.log("✅ Created owner ID:", ownerId);
+      }
+    } catch (ownerErr) {
+      console.error("❌ Error getting/creating owner:", ownerErr);
+      throw new Error('Failed to get or create owner record. Please try signing out and back in.');
     }
-
-    const ownerId = ownerData.id;
     console.log("👤 Owner ID:", ownerId);
 
     // 2️⃣ Get all shops owned by this owner
