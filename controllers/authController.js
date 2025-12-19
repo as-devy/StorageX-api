@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../config/supabaseClient.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -16,6 +17,60 @@ const createAuthClient = () => createClient(
   }
 );
 
+// Helper function to ensure owner record exists (get or create)
+const ensureOwnerRecord = async (authUserId, userMetadata = {}) => {
+  try {
+    // First, try to get existing owner
+    const { data: existingOwner, error: fetchError } = await supabase
+      .from('owners')
+      .select('id')
+      .eq('auth_user_id', authUserId)
+      .single();
+
+    // If owner exists, return it
+    if (existingOwner && !fetchError) {
+      console.log("✅ Owner record already exists:", existingOwner.id);
+      return existingOwner.id;
+    }
+
+    // If error is "not found" (PGRST116) or no data, create new owner record
+    // PGRST116 is the Supabase error code for "no rows returned"
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      // If it's a different error, log it but still try to create
+      console.warn("⚠️ Unexpected error fetching owner:", fetchError);
+    }
+
+    // Create new owner record
+    const ownerData = {
+      auth_user_id: authUserId,
+      full_name: userMetadata.full_name || null,
+      company_name: userMetadata.company_name || null,
+      phone: userMetadata.phone || null,
+    };
+
+    const { data: newOwner, error: createError } = await supabase
+      .from('owners')
+      .insert([ownerData])
+      .select('id')
+      .single();
+
+    if (createError) {
+      console.error("❌ Error creating owner record:", createError);
+      throw createError;
+    }
+
+    if (!newOwner) {
+      throw new Error("Failed to create owner record - no data returned");
+    }
+
+    console.log("✅ Created new owner record:", newOwner.id);
+    return newOwner.id;
+  } catch (err) {
+    console.error("❌ Error ensuring owner record:", err);
+    throw err;
+  }
+};
+
 export const signup = async (req, res) => {
   const { email, password, full_name, company_name, phone } = req.body;
   if (!email || !password) return res.status(400).json({ error: "Email and password required" });
@@ -28,6 +83,21 @@ export const signup = async (req, res) => {
   });
 
   if (error) return res.status(400).json({ error: error.message });
+  
+  // Create owner record after successful signup
+  if (data.user) {
+    try {
+      await ensureOwnerRecord(data.user.id, {
+        full_name,
+        company_name,
+        phone
+      });
+    } catch (ownerError) {
+      console.error("⚠️ Warning: Failed to create owner record:", ownerError);
+      // Don't fail signup if owner creation fails - it can be created on first login
+    }
+  }
+
   res.status(201).json({ message: "User registered", user: data.user });
 };
 
@@ -38,6 +108,21 @@ export const login = async (req, res) => {
   const { data, error } = await authClient.auth.signInWithPassword({ email, password });
 
   if (error) return res.status(400).json({ error: error.message });
+
+  // Ensure owner record exists (for backward compatibility with existing users)
+  if (data.user) {
+    try {
+      const userMetadata = data.user.user_metadata || {};
+      await ensureOwnerRecord(data.user.id, {
+        full_name: userMetadata.full_name,
+        company_name: userMetadata.company_name,
+        phone: userMetadata.phone
+      });
+    } catch (ownerError) {
+      console.error("⚠️ Warning: Failed to ensure owner record:", ownerError);
+      // Continue with login even if owner creation fails
+    }
+  }
 
   const token = data.session.access_token;
   // console.log("🔑 Auth First token:", token);
