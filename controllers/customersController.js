@@ -23,16 +23,36 @@ export const getCustomers = async (req, res) => {
       } else {
         // Owner doesn't exist, create it
         console.log("⚠️ Owner record not found, creating...");
-        ownerId = await ensureOwnerRecord(req.user.id, {
-          full_name: req.user.user_metadata?.full_name,
-          company_name: req.user.user_metadata?.company_name,
-          phone: req.user.user_metadata?.phone,
+        console.log("👤 User object:", {
+          id: req.user.id,
+          email: req.user.email,
+          hasUserMetadata: !!req.user.user_metadata,
+          userMetadata: req.user.user_metadata
         });
+        
+        const userMetadata = {
+          full_name: req.user.user_metadata?.full_name || req.user.user_metadata?.fullName || null,
+          company_name: req.user.user_metadata?.company_name || req.user.user_metadata?.companyName || null,
+          phone: req.user.user_metadata?.phone || null,
+        };
+        
+        console.log("📋 Prepared metadata:", userMetadata);
+        ownerId = await ensureOwnerRecord(req.user.id, userMetadata);
         console.log("✅ Created owner ID:", ownerId);
       }
     } catch (ownerErr) {
-      console.error("❌ Error getting/creating owner:", ownerErr);
-      throw new Error('Failed to get or create owner record. Please try signing out and back in.');
+      console.error("❌ Error getting/creating owner:", {
+        message: ownerErr.message,
+        code: ownerErr.code,
+        details: ownerErr.details,
+        hint: ownerErr.hint,
+        stack: ownerErr.stack
+      });
+      // Return more detailed error message
+      const errorMessage = ownerErr.details 
+        ? `Failed to create owner record: ${ownerErr.details}`
+        : ownerErr.message || 'Failed to get or create owner record';
+      throw new Error(errorMessage);
     }
     console.log("👤 Owner ID:", ownerId);
 
