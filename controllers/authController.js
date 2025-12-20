@@ -1,12 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
-import { ensureOwnerRecord } from "../utils/ownerHelper.js";
-import { supabaseUrl, supabaseAnonKey } from "../config/supabaseClient.js";
+import dotenv from "dotenv";
+dotenv.config();
 
 // Helper to create a temporary client for auth operations
 // This prevents polluting the global service-role client with user sessions
 const createAuthClient = () => createClient(
-  supabaseUrl,
-  supabaseAnonKey, // Use ANON key for auth operations, not Service Role
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY, // Use ANON key for auth operations, not Service Role
   {
     auth: {
       persistSession: false,
@@ -28,21 +28,6 @@ export const signup = async (req, res) => {
   });
 
   if (error) return res.status(400).json({ error: error.message });
-
-  // Create owner record after successful signup
-  if (data.user) {
-    try {
-      await ensureOwnerRecord(data.user.id, {
-        full_name,
-        company_name,
-        phone
-      });
-    } catch (ownerError) {
-      console.error("⚠️ Warning: Failed to create owner record:", ownerError);
-      // Don't fail signup if owner creation fails - it can be created on first login
-    }
-  }
-
   res.status(201).json({ message: "User registered", user: data.user });
 };
 
@@ -53,21 +38,6 @@ export const login = async (req, res) => {
   const { data, error } = await authClient.auth.signInWithPassword({ email, password });
 
   if (error) return res.status(400).json({ error: error.message });
-
-  // Ensure owner record exists (for backward compatibility with existing users)
-  if (data.user) {
-    try {
-      const userMetadata = data.user.user_metadata || {};
-      await ensureOwnerRecord(data.user.id, {
-        full_name: userMetadata.full_name,
-        company_name: userMetadata.company_name,
-        phone: userMetadata.phone
-      });
-    } catch (ownerError) {
-      console.error("⚠️ Warning: Failed to ensure owner record:", ownerError);
-      // Continue with login even if owner creation fails
-    }
-  }
 
   const token = data.session.access_token;
   // console.log("🔑 Auth First token:", token);

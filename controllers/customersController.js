@@ -1,5 +1,4 @@
 import { supabase } from '../config/supabaseClient.js';
-import { ensureOwnerRecord } from '../utils/ownerHelper.js';
 
 /**
  * ✅ Get all customers for all shops belonging to the authenticated owner
@@ -8,52 +7,18 @@ export const getCustomers = async (req, res) => {
   try {
     console.log("🔑 Auth user ID:", req.user.id);
 
-    // 1️⃣ Get or create the owner's internal ID using auth_user_id
-    let ownerId;
-    try {
-      const { data: ownerData, error: ownerError } = await supabase
-        .from('owners')
-        .select('id')
-        .eq('auth_user_id', req.user.id)
-        .single();
+    // 1️⃣ Get the owner's internal ID using auth_user_id
+    const { data: ownerData, error: ownerError } = await supabase
+      .from('owners')
+      .select('id')
+      .eq('auth_user_id', req.user.id)
+      .single();
 
-      if (ownerData && !ownerError) {
-        ownerId = ownerData.id;
-        console.log("✅ Found existing owner ID:", ownerId);
-      } else {
-        // Owner doesn't exist, create it
-        console.log("⚠️ Owner record not found, creating...");
-        console.log("👤 User object:", {
-          id: req.user.id,
-          email: req.user.email,
-          hasUserMetadata: !!req.user.user_metadata,
-          userMetadata: req.user.user_metadata
-        });
-        
-        const userMetadata = {
-          full_name: req.user.user_metadata?.full_name || req.user.user_metadata?.fullName || null,
-          company_name: req.user.user_metadata?.company_name || req.user.user_metadata?.companyName || null,
-          phone: req.user.user_metadata?.phone || null,
-        };
-        
-        console.log("📋 Prepared metadata:", userMetadata);
-        ownerId = await ensureOwnerRecord(req.user.id, userMetadata);
-        console.log("✅ Created owner ID:", ownerId);
-      }
-    } catch (ownerErr) {
-      console.error("❌ Error getting/creating owner:", {
-        message: ownerErr.message,
-        code: ownerErr.code,
-        details: ownerErr.details,
-        hint: ownerErr.hint,
-        stack: ownerErr.stack
-      });
-      // Return more detailed error message
-      const errorMessage = ownerErr.details 
-        ? `Failed to create owner record: ${ownerErr.details}`
-        : ownerErr.message || 'Failed to get or create owner record';
-      throw new Error(errorMessage);
+    if (ownerError || !ownerData) {
+      throw new Error('Owner record not found for this user');
     }
+
+    const ownerId = ownerData.id;
     console.log("👤 Owner ID:", ownerId);
 
     // 2️⃣ Get all shops owned by this owner
