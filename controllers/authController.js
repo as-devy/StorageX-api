@@ -1,13 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import { ensureOwnerRecord } from "../utils/ownerHelper.js";
-import dotenv from "dotenv";
-dotenv.config();
+import { supabaseUrl, supabaseAnonKey } from "../config/supabaseClient.js";
 
 // Helper to create a temporary client for auth operations
 // This prevents polluting the global service-role client with user sessions
 const createAuthClient = () => createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY, // Use ANON key for auth operations, not Service Role
+  supabaseUrl,
+  supabaseAnonKey, // Use ANON key for auth operations, not Service Role
   {
     auth: {
       persistSession: false,
@@ -29,7 +28,7 @@ export const signup = async (req, res) => {
   });
 
   if (error) return res.status(400).json({ error: error.message });
-  
+
   // Create owner record after successful signup
   if (data.user) {
     try {

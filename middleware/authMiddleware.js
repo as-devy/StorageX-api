@@ -1,17 +1,11 @@
 // middleware/authMiddleware.js
 
 import { createClient } from "@supabase/supabase-js";
+import { supabaseUrl, supabaseAnonKey } from "../config/supabaseClient.js";
 
 // Create a client for auth validation using ANON key (same as authController)
 // This ensures token validation works correctly
 const createAuthClient = () => {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Supabase environment variables (SUPABASE_URL, SUPABASE_ANON_KEY) are required");
-  }
-
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: false,
@@ -26,7 +20,7 @@ export const requireAuth = async (req, res, next) => {
     const token = req.headers.authorization?.replace("Bearer ", "");
 
     console.log("🔑 Token preview:", token ? `${token.substring(0, 20)}...` : "MISSING");
-    
+
     if (!token) {
       console.error("❌ No token provided in Authorization header");
       return res.status(401).json({ error: "No token provided" });
